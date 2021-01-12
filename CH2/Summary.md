@@ -41,5 +41,5 @@
 * A boot loader loads an OS into memory, can perform initialization and diagnosis.
 * The performance of an OS can be monitored using either counters or tracing.
   * Counters are a collection of system-wide or per-process statistics.
-  * Tracing follows the occurance of a specific event.
+  * Tracing follows the occurrence of a specific event.
   
