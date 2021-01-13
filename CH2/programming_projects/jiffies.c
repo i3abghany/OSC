@@ -50,5 +50,5 @@ module_init(proc_init);
 module_exit(proc_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Process Module");
+MODULE_DESCRIPTION("Jiffies Module");
 MODULE_AUTHOR("Mahmoud Abd Al-Ghany");
