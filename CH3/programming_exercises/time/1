@@ -3,10 +3,9 @@ CFLAGS=-O3 -pedantic-errors -Werror -Wall -Wmissing-prototypes -Wstrict-prototyp
 
 pipe: pipe_c
 	$(CC) $(CFLAGS) time.o -o time
-	rm time.o
 
 pipe_c: time_pipe.c
 	$(CC) $(CFLAGS) -c time_pipe.c -o time.o
 
 clean:
-	rm time
+	rm time_pipe
