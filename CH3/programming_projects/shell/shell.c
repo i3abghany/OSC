@@ -85,13 +85,23 @@ int main(void)
 				 (strcmp(args[num - 2], "2>") == 0))) { // output redirection.
 				int fd = open(args[num - 1], O_CREAT | O_RDWR, 0666);
 				if (fd == -1) {
-					perror("open");
+					perror(args[num - 1]);
+					return 1;
 				}
 				if (strcmp(args[num - 2], ">") == 0) {
 					dup2(fd, STDOUT_FILENO);
 				} else {
 					dup2(fd, STDERR_FILENO);
 				}
+				free(args[num - 2]); free(args[num - 1]);
+				args[num - 2] = NULL;
+			} else if (num >= 3 && (strcmp(args[num - 2], "<") == 0)) {
+				int fd = open(args[num - 1], O_RDONLY, 0666);
+				if (fd == -1) {
+					perror(args[num - 1]);
+					return 1;
+				}
+				dup2(fd, STDIN_FILENO);
 				free(args[num - 2]); free(args[num - 1]);
 				args[num - 2] = NULL;
 			}
