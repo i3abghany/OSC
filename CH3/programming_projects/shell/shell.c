@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 static const char *const prompt = "osh> ";
@@ -28,7 +30,8 @@ void strip_line(char **line);
 
 void handle_history(unsigned int cap);
 
-int main(void) {
+int main(void)
+{
 	int run = 1;
 	char *args[MAX_ARG_LEN];
 
@@ -67,6 +70,7 @@ int main(void) {
 			append_history(line_orig);		
 			continue;
 		}
+
 		
 		pid_t pid = fork();
 		
@@ -76,6 +80,21 @@ int main(void) {
 		} else if (pid == 0) {
 			free(args[num]);
 			args[num] = NULL;
+			if (num >= 3 && 
+				((strcmp(args[num - 2], ">") == 0) ||
+				 (strcmp(args[num - 2], "2>") == 0))) { // output redirection.
+				int fd = open(args[num - 1], O_CREAT | O_RDWR, 0666);
+				if (fd == -1) {
+					perror("open");
+				}
+				if (strcmp(args[num - 2], ">") == 0) {
+					dup2(fd, STDOUT_FILENO);
+				} else {
+					dup2(fd, STDERR_FILENO);
+				}
+				free(args[num - 2]); free(args[num - 1]);
+				args[num - 2] = NULL;
+			}
 			execvp(args[0], args);
 			perror(args[0]);
 		} else {
