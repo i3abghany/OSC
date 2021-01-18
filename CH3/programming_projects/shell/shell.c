@@ -21,22 +21,30 @@ static const char *const prompt = "osh> ";
 static char *history[MAX_LINE_LEN]; 
 static unsigned int history_top;
 
-void parse_args(char *line, char **args);
-void print_args(char **args);
-unsigned int num_args(char **args);
-void append_history(char *line);
+static unsigned int no_of_args;
+
+void alloc_args(char *args[MAX_ARG_LEN]);
+void init_args(char **args, char *args_1[MAX_ARG_LEN], char *args_2[MAX_ARG_LEN]);
+unsigned int num_args(void);
 
 void strip_line(char **line);
+unsigned int parse_args(char *line, char **args);
+void print_args(char **args);
+
+void append_history(char *line);
+
 
 void handle_history(unsigned int cap);
+
+int pipe_idx(char **args);
+int correct_pipe(char **args);
+void handle_pipe(char **args);
 
 int main(void)
 {
 	int run = 1;
 	char *args[MAX_ARG_LEN];
-
-	for (int i = 0; i < MAX_ARGS; i++)
-		args[i] = malloc(sizeof(char *));
+	alloc_args(args);
 
 	for (int i = 0; i < HISTORY_CAP; i++)
 		history[i] = malloc(sizeof(char *));
@@ -57,11 +65,15 @@ int main(void)
 		if (strcmp(line_orig, "\n") == 0) continue;
 
 		strcpy(line_storage, line_orig);
-		parse_args(line, args);
-		
-		unsigned int num = num_args(args);
+		no_of_args = parse_args(line, args);
+		unsigned int num = num_args();
 
-		args[num] = malloc(sizeof(char) * MAX_ARG_LEN);
+		if (correct_pipe(args)) {
+			handle_pipe(args);
+			append_history(line_orig);		
+			fflush(stdout);
+			continue;
+		}
 
 		if (strcmp(args[0], "history") == 0) {
 			unsigned int cap = 0;
@@ -70,8 +82,6 @@ int main(void)
 			append_history(line_orig);		
 			continue;
 		}
-
-		
 		pid_t pid = fork();
 		
 		if (pid < 0) {
@@ -106,7 +116,9 @@ int main(void)
 				args[num - 2] = NULL;
 			}
 			execvp(args[0], args);
+			printf("hello\n");
 			perror(args[0]);
+			continue;
 		} else {
 			if (strcmp(args[num - 1], "&") != 0) {
 				int stat;
@@ -126,31 +138,28 @@ int main(void)
 	return 0;
 }
 
-void parse_args(char *line, char **args) 
+unsigned int parse_args(char *line, char **args) 
 {
 	char *tok = NULL;
-	int i = 0;
+	unsigned int i = 0;
 	while ((tok = strsep(&line, " "))) {
 		strcpy(args[i++], tok);
 	}
 	args[i - 1][strlen(args[i - 1]) - 1] = '\0';
 
-	free(args[i]);
-	args[i] = NULL;
+	return (unsigned int) i;
 }
 
-unsigned int num_args(char **args) 
+unsigned int num_args() 
 {
-	unsigned int ret = 0;
-	while (args[ret++] != NULL);
-
-	return ret - 1;
+	return no_of_args;
 }
 
 void print_args(char **args)
 {
 	printf("%s", args[0]);
-	for (int i = 1; args[i] != NULL; i++) {
+	unsigned int num = num_args();
+	for (unsigned int i = 1; i < num; i++) {
 		printf(" %s", args[i]);
 	}
 	fflush(stdout);
@@ -186,4 +195,97 @@ void handle_history(unsigned int cap)
 	for (; i < history_top; i++) {
 		printf("%d: %s", i, history[i]);
 	}
+}
+
+void init_args(char **args, char *args_1[MAX_ARG_LEN], char *args_2[MAX_ARG_LEN])
+{
+	unsigned int idx = (unsigned int) pipe_idx(args);
+	unsigned int num = num_args();
+
+	alloc_args(args_1);
+	alloc_args(args_2);
+
+	for (unsigned int i = 0; i < idx; i++) {
+		strcpy(args_1[i], args[i]);
+	}
+	free(args_1[idx]);
+	args_1[idx] = NULL;
+
+	unsigned int j = 0;
+	for (unsigned int i = idx + 1; i < num; i++, j++) {
+		strcpy(args_2[j], args[i]);
+	}
+
+	free(args_2[j]);
+	args_2[j] = NULL;
+}
+
+void handle_pipe(char **args)
+{
+	char *args_1[MAX_ARG_LEN], *args_2[MAX_ARG_LEN];		
+	
+	init_args(args, args_1, args_2);
+	int fd[2];
+
+	if (pipe(fd) == -1) {
+		perror("pipe");
+		return;
+	}
+
+	if (fork() == 0) {
+		close(fd[READ_END]);
+		if (dup2(fd[WRITE_END], STDOUT_FILENO) == -1) {
+			perror("dup2");
+			return;
+		}
+		execvp(args_1[0], args_1);
+		perror(args_1[0]);
+		return;
+	}
+
+ 	if (fork() == 0) {
+		close(fd[WRITE_END]);
+		if (dup2(fd[READ_END], STDIN_FILENO) == -1) {
+			perror("dup2");
+			return;
+		}
+		execvp(args_2[0], args_2);
+		perror(args_2[0]);
+		return;
+	}
+
+	close(fd[0]);
+	close(fd[1]);
+	wait(NULL);
+	wait(NULL);
+}
+
+int pipe_idx(char **args)
+{
+	unsigned int num = num_args();
+	for (unsigned int i = 0; i < num; i++) {
+		if (strcmp(args[i], "|") == 0) 
+			return (int)i;
+	}
+	return -1;
+}
+
+int correct_pipe(char **args) 
+{
+	int idx = pipe_idx(args);
+	if (idx <= 0)
+		return 0;
+
+	int num = (int)num_args();
+	
+	if (idx == num - 1)
+		return 0;
+
+	return 1;
+}
+
+void alloc_args(char *args[MAX_ARG_LEN])
+{
+	for (int i = 0; i < MAX_ARGS / 2; i++)
+		args[i] = malloc(sizeof(char *));
 }
