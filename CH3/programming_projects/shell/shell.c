@@ -23,7 +23,8 @@ static unsigned int history_top;
 
 static unsigned int no_of_args;
 
-void alloc_args(char *args[MAX_ARG_LEN]);
+void alloc_args(char *args[MAX_ARG_LEN], unsigned int lim);
+void free_args(char *args[MAX_ARG_LEN], unsigned int lim);
 void init_args(char **args, char *args_1[MAX_ARG_LEN], char *args_2[MAX_ARG_LEN]);
 unsigned int num_args(void);
 
@@ -38,13 +39,15 @@ void handle_history(unsigned int cap);
 
 int pipe_idx(char **args);
 int correct_pipe(char **args);
-void handle_pipe(char **args);
+int handle_pipe(char **args);
+
+int file_exists(char *fname) ;
 
 int main(void)
 {
 	int run = 1;
 	char *args[MAX_ARG_LEN];
-	alloc_args(args);
+	alloc_args(args, MAX_ARGS);
 
 	for (int i = 0; i < HISTORY_CAP; i++)
 		history[i] = malloc(sizeof(char *));
@@ -64,14 +67,22 @@ int main(void)
 		strip_line(&orig_ptr);
 		if (strcmp(line_orig, "\n") == 0) continue;
 
+		
+		if (strcmp("exit", line_orig) == 0) {
+			break;
+		}
+
 		strcpy(line_storage, line_orig);
 		no_of_args = parse_args(line, args);
 		unsigned int num = num_args();
 
+		if (!file_exists(args[0])) {
+			break;
+		}
+
 		if (correct_pipe(args)) {
-			handle_pipe(args);
-			append_history(line_orig);		
-			fflush(stdout);
+			int ret = handle_pipe(args);
+			if (ret) append_history(line_orig);		
 			continue;
 		}
 
@@ -116,7 +127,6 @@ int main(void)
 				args[num - 2] = NULL;
 			}
 			execvp(args[0], args);
-			printf("hello\n");
 			perror(args[0]);
 			continue;
 		} else {
@@ -130,11 +140,9 @@ int main(void)
 		}
 	}
 
-	for (int i = 0; i < MAX_ARGS; i++)
-		free(args[i]);
+	free_args(args, MAX_ARGS);
+	free_args(history, HISTORY_CAP);
 
-	for (int i = 0; i < HISTORY_CAP; i++)
-		free(history[i]);
 	return 0;
 }
 
@@ -147,7 +155,7 @@ unsigned int parse_args(char *line, char **args)
 	}
 	args[i - 1][strlen(args[i - 1]) - 1] = '\0';
 
-	return (unsigned int) i;
+	return i;
 }
 
 unsigned int num_args() 
@@ -202,8 +210,8 @@ void init_args(char **args, char *args_1[MAX_ARG_LEN], char *args_2[MAX_ARG_LEN]
 	unsigned int idx = (unsigned int) pipe_idx(args);
 	unsigned int num = num_args();
 
-	alloc_args(args_1);
-	alloc_args(args_2);
+	alloc_args(args_1, MAX_ARGS / 2);
+	alloc_args(args_2, MAX_ARGS / 2);
 
 	for (unsigned int i = 0; i < idx; i++) {
 		strcpy(args_1[i], args[i]);
@@ -220,44 +228,60 @@ void init_args(char **args, char *args_1[MAX_ARG_LEN], char *args_2[MAX_ARG_LEN]
 	args_2[j] = NULL;
 }
 
-void handle_pipe(char **args)
+int handle_pipe(char **args)
 {
 	char *args_1[MAX_ARG_LEN], *args_2[MAX_ARG_LEN];		
 	
 	init_args(args, args_1, args_2);
-	int fd[2];
 
+	if (!file_exists(args_1[0])) {
+		printf("%s does not exist", args_1[0]);
+		return 0;
+	}
+
+	if (!file_exists(args_2[0])) {
+		printf("%s does not exist", args_2[0]);
+		return 0;
+	}
+
+	int fd[2];
 	if (pipe(fd) == -1) {
 		perror("pipe");
-		return;
+		return 0;
 	}
 
 	if (fork() == 0) {
 		close(fd[READ_END]);
 		if (dup2(fd[WRITE_END], STDOUT_FILENO) == -1) {
 			perror("dup2");
-			return;
+			return 0;
 		}
 		execvp(args_1[0], args_1);
 		perror(args_1[0]);
-		return;
+		return 0;
 	}
 
  	if (fork() == 0) {
 		close(fd[WRITE_END]);
 		if (dup2(fd[READ_END], STDIN_FILENO) == -1) {
 			perror("dup2");
-			return;
+			return 0;
 		}
 		execvp(args_2[0], args_2);
 		perror(args_2[0]);
-		return;
+		return 0;
 	}
 
 	close(fd[0]);
 	close(fd[1]);
+
 	wait(NULL);
 	wait(NULL);
+
+	free_args(args_1, MAX_ARGS / 2);
+	free_args(args_2, MAX_ARGS / 2);
+
+	return 1;
 }
 
 int pipe_idx(char **args)
@@ -284,8 +308,38 @@ int correct_pipe(char **args)
 	return 1;
 }
 
-void alloc_args(char *args[MAX_ARG_LEN])
+void alloc_args(char *args[MAX_ARG_LEN], unsigned int lim)
 {
-	for (int i = 0; i < MAX_ARGS / 2; i++)
+	for (unsigned int i = 0; i < lim; i++)
 		args[i] = malloc(sizeof(char *));
+}
+
+void free_args(char *args[MAX_ARG_LEN], unsigned int lim)
+{
+	for (unsigned int i = 0; i < lim; i++) {
+		if (args[i] != NULL) 
+			free(args[i]);
+	}
+}
+
+int file_exists(char *fname) 
+{
+	if (access(fname, F_OK) == 0)
+		return 1;
+
+	char *p = getenv("PATH");
+	char path[512];
+	strcpy(path, p);
+	char *tok = NULL;
+	char buf[128];
+	tok = strtok(path, ":");
+	while (tok != NULL)  {
+		strcpy(buf, tok);
+		strcat(buf, "/");
+		strcat(buf, fname);
+		if (access(buf, F_OK) == 0)
+			return 1;
+		tok = strtok(NULL, ":");
+	}
+	return 0;
 }
