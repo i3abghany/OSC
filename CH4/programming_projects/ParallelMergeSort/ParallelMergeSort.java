@@ -1,11 +1,12 @@
 import java.util.concurrent.*;
 
-public class Pool {
+public class ParallelMergeSort {
 
-    public static class SortTask implements Runnable {
+    public static class SortTask extends RecursiveAction {
         private final int[] arr;
         private final int lo;
         private final int hi;
+        private final static int THRESHOLD = 128;
 
         public SortTask(int[] arr, int lo, int hi) {
             this.arr = arr;
@@ -14,19 +15,40 @@ public class Pool {
         }
 
         @Override
-        public void run() {
-            for (int i = lo; i <= hi; i++) {
-                int max_val = Integer.MAX_VALUE;
-                int max_idx = lo;
-                for (int j = i; j <= hi; j++) {
-                    if (arr[j] < max_val) {
-                        max_val = arr[j];
-                        max_idx = j;
-                    }
+        protected void compute() {
+            if (this.hi - this.lo + 1 > THRESHOLD) {
+                int mid = this.lo + (this.hi - this.lo) / 2;
+                SortTask sortLo = new SortTask(arr, this.lo, mid);
+                SortTask sortHi = new SortTask(arr, mid + 1, hi);
+
+                sortLo.fork();
+                sortHi.fork();
+
+                sortLo.join();
+                sortHi.join();
+
+                MergeTask mergeArrs = new MergeTask(arr, 0, mid, mid + 1, hi);
+                ExecutorService s = Executors.newSingleThreadExecutor();
+                var temp = s.submit(mergeArrs);
+                try {
+                    temp.get(); // join.
+                    s.shutdown();
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
                 }
-                int tmp = arr[i];
-                arr[i] = arr[max_idx];
-                arr[max_idx] = tmp;
+
+            } else {
+                for (int i = lo; i < hi; i++) {
+                    int max_idx = i;
+                    for (int j = i + 1; j <= hi; j++) {
+                        if (arr[j] < arr[max_idx]) {
+                            max_idx = j;
+                        }
+                    }
+                    int tmp = arr[i];
+                    arr[i] = arr[max_idx];
+                    arr[max_idx] = tmp;
+                }
             }
         }
     }
@@ -76,25 +98,17 @@ public class Pool {
         }
     }
 
-    public static void main(String[] args) throws ExecutionException, InterruptedException {
-        int SIZE = 16;
+    public static void main(String[] args) {
+        int SIZE = 1024;
         int[] arr = new int[SIZE];
 
         for (int i = 0; i < arr.length; i++)
-            arr[i] = ThreadLocalRandom.current().nextInt(0, 32);
+            arr[i] = ThreadLocalRandom.current().nextInt(0, 2048);
 
-        ExecutorService p = Executors.newFixedThreadPool(3);
-        var z1 = p.submit(new SortTask(arr, 0, SIZE / 2 - 1));
-        var z2 = p.submit(new SortTask(arr, SIZE / 2, SIZE - 1));
-        var z3 = p.submit(new MergeTask(arr, 0, SIZE / 2 - 1, SIZE / 2, SIZE - 1));
-
-        z1.get();
-        z2.get();
-        z3.get();
+        SortTask srt = new SortTask(arr, 0, SIZE - 1);
+        new ForkJoinPool().invoke(srt);
 
         for (int i : arr)
             System.out.println(i);
-
-        p.shutdown();
     }
 }
