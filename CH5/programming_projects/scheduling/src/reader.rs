@@ -53,9 +53,9 @@ impl ProcReader {
             let els: Vec<&str> = self.procs_raw[0].split(',').collect();
             let p = Proc::new(
                 String::from(els[0]),
-                els[1].trim().parse().unwrap(),
                 els[2].trim().parse().unwrap(),
                 els[1].trim().parse().unwrap(),
+                els[2].trim().parse().unwrap(),
             );
             self.procs_raw.remove(0);
             return Some(p);
