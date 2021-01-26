@@ -17,22 +17,22 @@ impl FCFSScheduler {
         self.procs.push(t);
     }
 
-    pub fn get(&self, i: usize) -> &Proc {
+    fn get(&self, i: usize) -> &Proc {
         &self.procs[i]
     }
 
-    pub fn get_next(&self) -> usize {
+    fn get_next(&self) -> usize {
         return 0; // always the first Proc.
     }
 
-    pub fn schedule(&mut self) {
+    fn schedule(&mut self) {
         let next_idx: usize = self.get_next();
         let p = self.get(next_idx);
         println!("Scheduled {} for {}", p.get_name(), p.get_burst());
         self.remove(next_idx);
     }
 
-    pub fn remove(&mut self, i: usize) {
+    fn remove(&mut self, i: usize) {
         self.procs.remove(i);
     }
 
