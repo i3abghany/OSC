@@ -23,7 +23,7 @@ impl Proc {
         &self.name
     }
 
-    pub fn get_burst(&self) -> u32 {
+    pub fn get_burst(&mut self) -> u32 {
         self.cpu_burst
     }
 
@@ -31,7 +31,11 @@ impl Proc {
         self.priority
     }
 
-    pub fn get_rem(&self) -> u32 {
+    pub fn get_rem(&mut self) -> u32 {
         self.time_rem
+    }
+
+    pub fn schedule_for(&mut self, n: u32) {
+        self.time_rem = self.time_rem - n;
     }
 }
