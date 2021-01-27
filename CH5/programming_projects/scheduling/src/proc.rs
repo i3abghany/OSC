@@ -30,4 +30,8 @@ impl Proc {
     pub fn get_priority(&self) -> u32 {
         self.priority
     }
+
+    pub fn get_rem(&self) -> u32 {
+        self.time_rem
+    }
 }
