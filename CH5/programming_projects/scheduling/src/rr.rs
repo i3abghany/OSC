@@ -1,5 +1,5 @@
 use crate::proc::*;
-use std::{borrow::BorrowMut, cmp};
+use std::cmp;
 
 pub struct RRScheduler {
     procs: Vec<Proc>,
