@@ -4,6 +4,9 @@ pub struct Proc {
     cpu_burst: u32, 
     priority: u32,
     time_rem: u32,
+    turnaround_time: u32,
+    wait_time: u32,
+    response_time: u32
 }
 
 impl Proc {
@@ -16,6 +19,9 @@ impl Proc {
             cpu_burst,
             priority,
             time_rem,
+            turnaround_time: 0,
+            wait_time: 0,
+            response_time: 0,
         }
     }
 
@@ -38,4 +44,29 @@ impl Proc {
     pub fn schedule_for(&mut self, n: u32) {
         self.time_rem = self.time_rem - n;
     }
+
+    pub fn wait_for(&mut self, n: u32) {
+        self.wait_time += n;
+    }
+
+    pub fn respond(&mut self, n: u32) {
+        self.response_time = n;
+    }
+
+    pub fn turnaround(&mut self, n: u32) {
+        self.turnaround_time = n;
+    }
+
+    pub fn get_wait_time(&self) -> u32 {
+        self.wait_time
+    }
+
+    pub fn get_turnaround_time(&self) -> u32 {
+        self.turnaround_time
+    }
+    
+    pub fn get_response_time(&self) -> u32 {
+        self.response_time
+    }
+
 }
